@@ -22,9 +22,7 @@ def generate_summary(transcript_text, meet_link):
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable not set.")
-    genai.configure(api_key=api_key)
-
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    client = genai.Client(api_key=api_key)
 
     prompt = f"""
     As an expert meeting analyst, your task is to provide a clear and concise summary of the following meeting transcript.
@@ -44,8 +42,9 @@ def generate_summary(transcript_text, meet_link):
     """
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
         summary_text = response.text
+        print(summary_text)
     except Exception as e:
         raise RuntimeError(f"Failed to generate summary with Gemini: {e}")
 

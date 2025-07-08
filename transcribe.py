@@ -1,6 +1,7 @@
 import assemblyai as aai
 from dotenv import load_dotenv
 import os
+import logging
 from pydub import AudioSegment
 
 load_dotenv()
@@ -34,14 +35,22 @@ def transcribe_audio(audio_file_path):
     config = aai.TranscriptionConfig(speech_model=aai.SpeechModel.best)
     transcriber = aai.Transcriber(config=config)
     transcript = transcriber.transcribe(temp_audio_path)
+    print(transcript.text)
 
     # Clean up temp file
     os.remove(temp_audio_path)
 
     if transcript.status == aai.TranscriptStatus.error:
-        raise RuntimeError(f"Transcription failed: {transcript.error}")
+        logging.error(f"Transcription failed with error: {transcript.error}")
+        return None, None
 
-    if not transcript.text:
+    if transcript.status != aai.TranscriptStatus.completed:
+        logging.warning(f"Transcription for {audio_file_path} did not complete. Status: {transcript.status}")
+        return None, None
+
+    transcript_text = transcript.text
+    if not transcript_text:
+        logging.warning(f"Transcription for {audio_file_path} completed but returned empty text. Full transcript object: {transcript}")
         return None, None
 
     # Save transcript to a file
@@ -52,4 +61,5 @@ def transcribe_audio(audio_file_path):
     with open(transcript_file_path, "w") as f:
         f.write(transcript.text)
 
+    print(transcript.text, transcript_file_path)
     return transcript.text, transcript_file_path

@@ -120,16 +120,39 @@ function App() {
             });
           }
         };
-        const stopCleanup = () => {
+        const stopCleanup = async () => {
           setIsRecording(false);
-          setStatusMessage('Recording finished and uploaded.');
+          setStatusMessage('Recording finished. Uploading for processing...');
           meetWindowRef.current?.close();
-          // send owner email to backend so it can email later
-          fetch('/api/owner-email', {
+
+          const meetingCode = new URL(meetingUrl).pathname.split('/')[1];
+
+          // First, ensure the owner's email is logged
+          await fetch('/api/owner-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ meetingCode: new URL(meetingUrl).pathname.split('/')[1], email: ownerEmail }),
+            body: JSON.stringify({ meetingCode, email: ownerEmail }),
           });
+
+          // Now, trigger the final processing
+          console.log(`[App.tsx] Calling /api/record-finish for meeting code: ${meetingCode}`);
+          const response = await fetch('/api/record-finish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              meetingCode,
+              meetLink: meetingUrl,
+              ownerEmail
+            }),
+          });
+
+          if (response.ok) {
+            setStatusMessage('Processing complete! Your summary will be emailed shortly.');
+          } else {
+            const errorData = await response.json();
+            setError(`Processing failed: ${errorData.detail || 'Unknown error'}`);
+            setStatusMessage('There was an error processing your meeting.');
+          }
         };
         mediaRecorder.onstop = stopCleanup;
         stream.getAudioTracks()[0].addEventListener('ended', () => {
