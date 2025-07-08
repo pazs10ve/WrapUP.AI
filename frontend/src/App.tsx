@@ -69,6 +69,7 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const meetWindowRef = useRef<Window | null>(null);
   const [error, setError] = useState('');
+  const apiUrl = 'https://wrapup-ai-nextjs.onrender.com';
 
     const handleStartRecording = async () => {
     const emailValid = /.+@.+\..+/.test(ownerEmail);
@@ -113,7 +114,7 @@ function App() {
           if (evt.data.size) {
             const arrayBuffer = await evt.data.arrayBuffer();
             const meetCode = new URL(meetingUrl).pathname.split('/')[1];
-            await fetch('/api/record-chunk', {
+            await fetch(`${apiUrl}/api/record-chunk`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/octet-stream', 'x-meet-code': meetCode },
               body: arrayBuffer,
@@ -128,7 +129,7 @@ function App() {
           const meetingCode = new URL(meetingUrl).pathname.split('/')[1];
 
           // First, ensure the owner's email is logged
-          await fetch('/api/owner-email', {
+          await fetch(`${apiUrl}/api/owner-email`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ meetingCode, email: ownerEmail }),
@@ -136,7 +137,7 @@ function App() {
 
           // Now, trigger the final processing
           console.log(`[App.tsx] Calling /api/record-finish for meeting code: ${meetingCode}`);
-          const response = await fetch('/api/record-finish', {
+          const finishResponse = await fetch(`${apiUrl}/api/record-finish`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -146,10 +147,10 @@ function App() {
             }),
           });
 
-          if (response.ok) {
+          if (finishResponse.ok) {
             setStatusMessage('Processing complete! Your summary will be emailed shortly.');
           } else {
-            const errorData = await response.json();
+            const errorData = await finishResponse.json();
             setError(`Processing failed: ${errorData.detail || 'Unknown error'}`);
             setStatusMessage('There was an error processing your meeting.');
           }
