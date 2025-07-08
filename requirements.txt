@@ -2,9 +2,7 @@ google-genai
 assemblyai
 python-dotenv
 pydub
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
+sib-api-v3-sdk
 fastapi
 uvicorn[standard]
 python-multipart

@@ -76,8 +76,15 @@ async def process_meeting(
             "transcript_file": transcript_file_path
         }
 
+        # 7. Clean up the uploaded audio file
+        try:
+            os.remove(file_location)
+            logging.info(f"[process-meeting] Successfully deleted temporary audio file: {file_location}")
+        except OSError as e:
+            logging.error(f"[process-meeting] Error deleting temporary audio file {file_location}: {e}")
+
     except Exception as e:
-        print(f'[process-meeting] An error occurred: {e}')
+        logging.error(f"[process-meeting] An error occurred: {e}")
         # Log the error and update the meeting status if something goes wrong
         end_time = datetime.now()
         db.update_meeting(meeting_id, end_time, "ERROR", str(e))

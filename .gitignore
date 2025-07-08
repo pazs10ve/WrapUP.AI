@@ -11,3 +11,4 @@ credentials.json
 token.json
 transcript.txt
 summary.txt
+check_credentials.py
