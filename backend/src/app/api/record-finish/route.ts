@@ -5,7 +5,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 
 const recordingsDir = path.join(process.cwd(), 'recordings');
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8001';
+const fastApiUrl = process.env.NEXT_PUBLIC_FASTAPI_URL || 'http://localhost:8001/process-meeting/';
 
 export async function POST(req: NextRequest) {
   console.log('--- Received request to /api/record-finish ---');
@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
     form.append('user_email', ownerEmail);
     form.append('audio_file', fs.createReadStream(filePath), `${meetingCode}.webm`);
     console.log('[record-finish] FormData created, preparing to call FastAPI.');
+    console.log(`Forwarding request to FastAPI at ${fastApiUrl}`);
 
-    const response = await axios.post(`${FASTAPI_URL}/process-meeting/`, form, {
+    const response = await axios.post(fastApiUrl, form, {
       headers: {
         ...form.getHeaders(),
       },
