@@ -7,5 +7,3 @@ fastapi
 uvicorn[standard]
 python-multipart
 pyaudio
-wave
-audioop-lts
