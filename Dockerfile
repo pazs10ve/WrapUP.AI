@@ -1,17 +1,11 @@
-FROM python:3.11-slim
+# Use an official Python runtime as a parent image
+FROM python:3.13
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies required for audio processing
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libasound2-dev \
-    portaudio19-dev \
-    python3-dev \
-    build-essential \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies required for ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg
 
 # Copy the requirements file into the container
 COPY requirements.txt .
@@ -26,7 +20,7 @@ COPY . .
 EXPOSE 8001
 
 # Define environment variable
-ENV NAME=World
+ENV NAME World
 
 # Run app.py when the container launches
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001"]
