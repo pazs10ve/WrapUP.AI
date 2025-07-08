@@ -1,0 +1,13 @@
+.venv
+.env
+__pycache__ 
+test_assembly.py
+test_gemini.py
+audio.m4a
+test.py
+audio.m4a
+audio.mp3
+credentials.json
+token.json
+transcript.txt
+summary.txt

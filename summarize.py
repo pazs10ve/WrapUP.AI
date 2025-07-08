@@ -1,81 +1,63 @@
+import os
 from google import genai
 from dotenv import load_dotenv
-import os
-import argparse
+from datetime import datetime
 
 load_dotenv()
 
-class Summarizer:
+# Ensure the summaries directory exists
+os.makedirs("summaries", exist_ok=True)
+
+def generate_summary(transcript_text, meet_link):
     """
-    A class to handle meeting transcript summarization using the Gemini API.
+    Generates a structured summary from the transcript text using the Gemini API.
+
+    Args:
+        transcript_text (str): The full text of the meeting transcript.
+        meet_link (str): The link to the Google Meet session.
+
+    Returns:
+        tuple: A tuple containing the summary text (str) and the path to the summary file (str).
     """
-    def __init__(self):
-        """
-        Initializes the Summarizer by configuring the Gemini API key.
-        """
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("GEMINI_API_KEY environment variable not set.")
-        self.client = genai.Client(api_key=self.api_key)
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable not set.")
+    genai.configure(api_key=api_key)
 
-    def summarize(self, transcript_text):
-        """
-        Generates a structured summary from the transcript text.
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
-        Args:
-            transcript_text (str): The full text of the meeting transcript.
+    prompt = f"""
+    As an expert meeting analyst, your task is to provide a clear and concise summary of the following meeting transcript.
+    The meeting was held at the following link: {meet_link}
 
-        Returns:
-            str: The generated summary from the model.
-        """
-        prompt = f"""
-        As an expert meeting analyst, your task is to provide a clear and concise summary of the following meeting transcript.
+    Please structure your output in three distinct sections:
+    1.  **Executive Summary:** A brief, high-level overview of the meeting's purpose and key outcomes (2-3 sentences).
+    2.  **Key Discussion Points:** A bulleted list of the most important topics, decisions, and insights discussed.
+    3.  **Action Items:** A numbered list of all tasks assigned, including who is responsible and any mentioned deadlines.
 
-        Please structure your output in three distinct sections:
-        1.  **Executive Summary:** A brief, high-level overview of the meeting's purpose and key outcomes (2-3 sentences).
-        2.  **Key Discussion Points:** A bulleted list of the most important topics, decisions, and insights discussed.
-        3.  **Action Items:** A numbered list of all tasks assigned, including who is responsible and any mentioned deadlines.
+    If any of these sections are not applicable (e.g., no action items were discussed), state "None."
 
-        If any of these sections are not applicable (e.g., no action items were discussed), state "None."
+    Here is the transcript:
+    ---
+    {transcript_text}
+    ---
+    """
 
-        Here is the transcript:
-        ---
-        {transcript_text}
-        ---
-        """
+    try:
+        response = model.generate_content(prompt)
+        summary_text = response.text
+    except Exception as e:
+        raise RuntimeError(f"Failed to generate summary with Gemini: {e}")
 
-        try:
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash", 
-                contents=prompt
-            )
-            return response.text
-        except Exception as e:
-            raise RuntimeError(f"Failed to generate summary with Gemini: {e}")
+    if not summary_text:
+        return None, None
 
+    # Save summary to a file
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_filename = f"summary_{timestamp}.txt"
+    summary_file_path = os.path.join("summaries", summary_filename)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Summarize a meeting transcript.")
-    parser.add_argument(
-        "transcript_file", 
-        type=str, 
-        help="The path to the text file containing the meeting transcript."
-    )
-    args = parser.parse_args()
+    with open(summary_file_path, "w") as f:
+        f.write(summary_text)
 
-    if not os.path.exists(args.transcript_file):
-        print(f"Error: Transcript file not found at '{args.transcript_file}'")
-    else:
-        try:
-            with open(args.transcript_file, 'r', encoding='utf-8') as f:
-                transcript = f.read()
-            
-            summarizer = Summarizer()
-            summary = summarizer.summarize(transcript)
-
-            with open("summary.txt", "w") as f:
-                f.write(summary)
-   
-
-        except (ValueError, RuntimeError) as e:
-            print(f"An error occurred: {e}")
+    return summary_text, summary_file_path

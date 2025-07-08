@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Container,
   Box,
@@ -62,23 +62,103 @@ const elegantTheme = createTheme({
 
 function App() {
   const [meetingUrl, setMeetingUrl] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const meetWindowRef = useRef<Window | null>(null);
   const [error, setError] = useState('');
 
-  const handleStartRecording = async () => {
-    if (!meetingUrl.startsWith('https://meet.google.com/')) {
-      setError('Please enter a valid Google Meet URL.');
+    const handleStartRecording = async () => {
+    const emailValid = /.+@.+\..+/.test(ownerEmail);
+    if (!meetingUrl || !meetingUrl.startsWith('https://meet.google.com/')) {
+      setError('Please enter a valid Google Meet link.');
       return;
     }
-    setError('');
+    if (!emailValid) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setIsLoading(true);
-    setStatusMessage('Joining the meeting... please wait.');
+    setError('');
+    setStatusMessage('Opening meeting tab...');
 
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    const meetWindow = window.open(meetingUrl, '_blank');
+    meetWindowRef.current = meetWindow;
+    if (!meetWindow) {
+      setIsLoading(false);
+      setError('Popup blocked. Please allow pop-ups for this site.');
+      return;
+    }
 
-    setIsLoading(false);
-    setStatusMessage('Recording has started!');
+    // Give the tab a moment to load before asking the user to pick it.
+    setTimeout(async () => {
+      try {
+        setStatusMessage('Please choose the Meet tab and click "Share" to start capture.');
+        // Ask for tab (or window) capture with audio.
+        // Chrome will show built-in picker.
+        // @ts-ignore – preferCurrentTab is non-standard but most browsers ignore it.
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+        // We only need audio; turn off video tracks to save bandwidth.
+        stream.getVideoTracks().forEach(t => t.stop());
+
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.ondataavailable = async (evt) => {
+          if (evt.data.size) {
+            const arrayBuffer = await evt.data.arrayBuffer();
+            const meetCode = new URL(meetingUrl).pathname.split('/')[1];
+            await fetch('/api/record-chunk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/octet-stream', 'x-meet-code': meetCode },
+              body: arrayBuffer,
+            });
+          }
+        };
+        const stopCleanup = () => {
+          setIsRecording(false);
+          setStatusMessage('Recording finished and uploaded.');
+          meetWindowRef.current?.close();
+          // send owner email to backend so it can email later
+          fetch('/api/owner-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ meetingCode: new URL(meetingUrl).pathname.split('/')[1], email: ownerEmail }),
+          });
+        };
+        mediaRecorder.onstop = stopCleanup;
+        stream.getAudioTracks()[0].addEventListener('ended', () => {
+          if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        });
+        mediaRecorder.start(1000); // 1-second chunks
+        setStatusMessage('Recording... (click Stop when done)');
+        setIsRecording(true);
+        setIsLoading(false);
+
+        // Poll for window closed
+        const winInterval = setInterval(() => {
+          if (meetWindowRef.current && meetWindowRef.current.closed) {
+            clearInterval(winInterval);
+            if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+          }
+        }, 1000);
+
+        // Expose stop function
+        (window as any).stopWrapupRecording = () => {
+          if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        };
+      } catch (err: any) {
+        setIsLoading(false);
+        setError(err.message || 'Capture cancelled.');
+        setStatusMessage('');
+        meetWindow.close();
+      }
+    }, 1500);
   };
 
   return (
@@ -123,7 +203,7 @@ function App() {
             style={{ width: '100%' }}
           >
             <Paper elevation={0} sx={{ p: 4, mt: 2 }}>
-              <Box component="form" noValidate>
+                            <Box component="form" noValidate onSubmit={(e) => { e.preventDefault(); handleStartRecording(); }}>
                 <TextField
                   fullWidth
                   id="meetingUrl"
@@ -137,12 +217,21 @@ function App() {
                   helperText={error}
                   sx={{ mb: 2 }}
                 />
+                <TextField
+                  fullWidth
+                  id="ownerEmail"
+                  label="Your email (to receive summary)"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  disabled={isLoading || isRecording}
+                  sx={{ mb: 2 }}
+                />
                 <Button
                   type="button"
                   fullWidth
                   variant="contained"
                   size="large"
-                  onClick={handleStartRecording}
+                                    onClick={handleStartRecording}
                   disabled={isLoading}
                 >
                   {isLoading ? <CircularProgress size={26} color="inherit" /> : 'Start Recording'}
@@ -152,6 +241,17 @@ function App() {
                     {statusMessage}
                   </Typography>
                 )}
+                <Button
+                  sx={{ mt: 2 }}
+                  fullWidth
+                  variant="outlined"
+                  color="secondary"
+                  disabled={!isRecording}
+                  onClick={() => (window as any).stopWrapupRecording?.()}
+                >
+                  Stop Recording
+                </Button>
+
               </Box>
             </Paper>
           </motion.div>
